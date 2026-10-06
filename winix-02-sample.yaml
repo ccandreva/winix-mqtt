@@ -1,6 +1,8 @@
 # winix-02.yaml
 # 202011202237   
 
+# working directory for the program
+working_directory: "/home/user/winix/"
 # debugging to file level
 # Value:
 # CRITICAL (and above)

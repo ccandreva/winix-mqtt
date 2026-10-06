@@ -1,20 +1,22 @@
 #! /usr/bin/env python3
 #
 # winix-02.py
-# 202012031810             
+# 202012031810
 #
 
 #
 PROGRAM_NAME = "winix-02"
 VERSION_MAJOR = "1"
 VERSION_MINOR = "13"
-WORKING_DIRECTORY = "/home/user/winix/"
+#WORKING_DIRECTORY = "/home/user/winix/"
+WORKING_DIRECTORY = "./"
+CONFIG_DIRECTORY = "../winix-public/"
 # winix URL's
 GET_STATUS_URL = "https://us.api.winix-iot.com/common/event/sttus/devices/"
 COMMAND_URL = "https://us.api.winix-iot.com/common/control/devices/"
 
-# 
-# 
+#
+#
 #
 
 import sys
@@ -74,16 +76,17 @@ handler_file.doRollover()
 my_logger = logging.getLogger(PROGRAM_NAME)
 
 # read yaml config file which lists the air purifer units
+config_file = CONFIG_DIRECTORY + PROGRAM_NAME + ".yaml"
 try :
-    raw_yaml = Path(WORKING_DIRECTORY + PROGRAM_NAME + ".yaml").read_text()
+    raw_yaml = Path(config_file).read_text()
 except Exception as e:
-    my_logger.error("Error : configuration file : " + WORKING_DIRECTORY + PROGRAM_NAME + ".yaml" + " not found.")
+    my_logger.error("Error : configuration file : " + config_file + " not found.")
     sys.exit(1)
 
-try : 
-    PROGRAM_CONFIG = yaml.load(Path(WORKING_DIRECTORY + PROGRAM_NAME + ".yaml").read_text(), Loader=yaml.FullLoader)
+try :
+    PROGRAM_CONFIG = yaml.load(Path(config_file).read_text(), Loader=yaml.FullLoader)
 except Exception as e :
-    my_logger.error("Error : YAML syntax problem in configuration file : " + WORKING_DIRECTORY + PROGRAM_NAME + ".yaml" + " .")
+    my_logger.error("Error : YAML syntax problem in configuration file : " + config_file + " .")
     sys.exit(1)
 
 # read debug from YAML config file
@@ -100,6 +103,9 @@ handler_file.setLevel(logging_level_file)
 MQTT_SERVER = PROGRAM_CONFIG.get("mqtt", "")
 if ( MQTT_SERVER == "" ) :
     MQTT_SERVER = "192.168.2.242"
+MQTT_PORT = PROGRAM_CONFIG.get("mqtt_port", "1883")
+MQTT_USERNAME = PROGRAM_CONFIG.get("username", "")
+MQTT_PASSWORD = PROGRAM_CONFIG.get("password", "")
 
 # read MQTT server info from YAML config file
 # simple key value pair in YAML file : mqtt: "<mqtt server info>"
@@ -164,12 +170,12 @@ OPERATION_MODE = {"COMMAND" : "A03", "AUTO" : "01", "MANUAL" : "02"}
 PLASMAWAVE = {"COMMAND" : "A07", "ON" : "1", "OFF" : "0"}
 FAN_SPEED = {"COMMAND" : "A04", "100" : "05", "75" : "03", "50" : "02", "25" : "01", "SLEEP" : "06"}
 SLEEP = {"COMMAND" : "A04", "SLEEP" : "06"}
-AIR_QUALITY = {"COMMAND" : "S07", "GOOD" : "01", "FAIR" : "02", "POOR" : "03"}
+AIR_QUALITY = {"COMMAND" : "S07", "GOOD" : "01", "FAIR" : "02", "POOR" : "03", "HUH" : "1.0"}
 FILTER_HOURS = {"COMMAND" : "A21"}
 AMBIENT_LIGHT = {"COMMAND" : "S14"}
 AIR_QUALITY_VALUE = {"COMMAND" : "S08"}
 
-# device characteristics 
+# device characteristics
 
 DEVICE_SPECIFICATION = {'manufacture' : ' WINIX', 'model' : 'C545', 'power' : '65 watts', 'room_size' : '360 sq. ft', 'weight' : '11.5 lbs'}
 
@@ -180,11 +186,13 @@ tl = Timeloop()
 
 # create MQTT client globally
 # connect to MQTT server
-mqttc = mqtt.Client(PROGRAM_NAME)  # Create instance of client with client ID 
-mqttc.connect(MQTT_SERVER, 1883)  # Connect to (broker, port, keepalive-time)
+mqttc = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1,PROGRAM_NAME)  # Create instance of client with client ID
+mqttc.username_pw_set(username=MQTT_USERNAME, password=MQTT_PASSWORD)
+mqttc.tls_set()
+mqttc.connect(MQTT_SERVER, MQTT_PORT)  # Connect to (broker, port, keepalive-time)
 
 # setup a simple queue where we can put a request for an update to a winix unit from the winix cloud
-queue_unit_request_update = queue.SimpleQueue() 
+queue_unit_request_update = queue.SimpleQueue()
 
 # functions to handle the command messages from MQTT sources
 
@@ -435,7 +443,7 @@ def get_unit_update(unit_mac) :
     message["unit_power_ordinal"] = str(int(unit_power_ordinal))
     message["power_text"] = unit_power_text
     message["unit_sleeping_text"] = unit_sleeping_text
-    message["air_quality_ordinal"] = str(int(air_quality_ordinal))
+    message["air_quality_ordinal"] = str((air_quality_ordinal))
     message["air_quality_text"] = air_quality_text
     message["air_quality_value"] = air_quality_value
     message["unit_plasmawave_ordinal"] = str(int(unit_plasmawave_ordinal))
@@ -482,7 +490,7 @@ def main():
 
     try :
         # # connect to MQTT server
-        # mqttc = mqtt.Client(PROGRAM_NAME)  # Create instance of client with client ID 
+        # mqttc = mqtt.Client(PROGRAM_NAME)  # Create instance of client with client ID
         # mqttc.connect(MQTT_SERVER, 1883)  # Connect to (broker, port, keepalive-time)
         # Add message callbacks that will only trigger on a specific subscription match.
         mqttc.message_callback_add(MQTT_TOPIC_BASE + "#", message_to_or_from_unit)
